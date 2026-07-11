@@ -1,0 +1,18 @@
+{
+  "company": "Weber Constructions S.à r.l.",
+  "manager": "Marc Weber",
+  "address": "15, Rue de la Forge",
+  "city": "Pétange",
+  "postal": "L-4740",
+  "country": "Luxembourg",
+  "phone": "+352 26 50 11 22",
+  "email": "contact@weber-constructions.lu",
+  "website": "www.weber-constructions.lu",
+  "tvaNumber": "LU12345678",
+  "matricule": "19850412345",
+  "rcs": "B 123456",
+  "autorisation": "00123456",
+  "iban": "LU28 0019 4006 4475 0000",
+  "bic": "BCEELULL",
+  "logoUrl": null
+}
