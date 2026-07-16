@@ -36,6 +36,19 @@ export interface DevisItem {
   total: number;
 }
 
+export interface PriceCatalogItem {
+  reference: string;
+  description: string;
+  unit: string;
+  unitPrice: number;
+}
+
+export interface PriceCatalog {
+  currency: string;
+  updatedAt: string;
+  items: PriceCatalogItem[];
+}
+
 export interface Devis {
   id?: string;
   number?: string;
@@ -50,6 +63,9 @@ export interface Devis {
   tvaAmount: number;
   total: number;
   notes?: string;
+  signatureDataUrl?: string;
+  signerName?: string;
+  signedAt?: string;
   status: "draft" | "sent" | "validated" | "paid" | "overdue" | "cancelled";
   isRenovationPrincipal?: boolean;
   language?: Language;

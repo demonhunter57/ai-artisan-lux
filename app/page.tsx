@@ -4,12 +4,15 @@ import { useState, useCallback } from "react";
 import { v4 as uuid } from "uuid";
 import ChatInterface from "@/components/ChatInterface";
 import DevisPreview from "@/components/DevisPreview";
-import { ChatMessage, ClaudeResponse, Devis, Language } from "@/lib/types";
-import { t, getLanguageLabel } from "@/lib/i18n";
+import { ChatMessage, ClaudeResponse, Devis, Language, PriceCatalog } from "@/lib/types";
+import { t, tf } from "@/lib/i18n";
 import artisanProfile from "@/data/artisan-profile.json";
+import priceCatalogData from "@/data/prestations-prix.json";
 import { format } from "date-fns";
+import { computeDevisTotals } from "@/lib/devis";
 
 const LANGUAGES: Language[] = ["fr", "en", "lb"];
+const priceCatalog = priceCatalogData as PriceCatalog;
 
 const makeWelcome = (lang: Language): ChatMessage => ({
   id: uuid(),
@@ -42,11 +45,15 @@ export default function HomePage() {
     if (!userText) return;
     setInput("");
 
-    addMessage({ role: "user", content: userText });
+    const userHistoryMessage = { role: "user", content: userText } as const;
+    addMessage(userHistoryMessage);
     setIsTyping(true);
 
     try {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }));
+      const history = [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        userHistoryMessage,
+      ];
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -64,23 +71,12 @@ export default function HomePage() {
       const data: ClaudeResponse = await res.json();
 
       if (data.devis) {
-        const merged: Partial<Devis> = {
+        const merged = computeDevisTotals({
           ...currentDevis,
           ...data.devis,
           date: data.devis.date ?? format(new Date(), "yyyy-MM-dd"),
           status: data.devis.status ?? "draft",
-        };
-
-        // Recalculate totals if items changed
-        if (data.devis.items) {
-          const subtotal = data.devis.items.reduce((s, i) => s + i.total, 0);
-          const tvaRate = merged.tvaRate ?? 17;
-          const tvaAmount = +(subtotal * tvaRate / 100).toFixed(2);
-          merged.subtotal = subtotal;
-          merged.tvaAmount = tvaAmount;
-          merged.total = +(subtotal + tvaAmount).toFixed(2);
-          merged.tvaRate = tvaRate;
-        }
+        });
 
         setCurrentDevis(merged);
       }
@@ -94,7 +90,7 @@ export default function HomePage() {
     } catch {
       addMessage({
         role: "assistant",
-        content: "Une erreur est survenue. Veuillez réessayer.",
+        content: t("chat.error.generic", lang),
         action: "none",
       });
     } finally {
@@ -108,19 +104,19 @@ export default function HomePage() {
       ? t("tva.yes", lang)
       : t("tva.no", lang);
 
-    addMessage({ role: "user", content: label });
+    const userHistoryMessage = { role: "user", content: label } as const;
+    addMessage(userHistoryMessage);
 
-    if (currentDevis) {
-      const subtotal = currentDevis.subtotal ?? 0;
-      const tvaAmount = +(subtotal * rate / 100).toFixed(2);
-      const updated: Partial<Devis> = {
+    const updatedDevis = currentDevis
+      ? computeDevisTotals({
         ...currentDevis,
         tvaRate: rate,
-        tvaAmount,
-        total: +(subtotal + tvaAmount).toFixed(2),
         isRenovationPrincipal: isRenovation,
-      };
-      setCurrentDevis(updated);
+      })
+      : null;
+
+    if (updatedDevis) {
+      setCurrentDevis(updatedDevis);
     }
 
     setIsTyping(true);
@@ -130,21 +126,34 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: label,
-          history: messages.map((m) => ({ role: m.role, content: m.content })),
+          history: [
+            ...messages.map((m) => ({ role: m.role, content: m.content })),
+            userHistoryMessage,
+          ],
           language: lang,
-          currentDevis,
+          currentDevis: updatedDevis ?? currentDevis,
           artisanProfile,
         }),
       });
       if (!res.ok) throw new Error();
       const data: ClaudeResponse = await res.json();
+
+      if (data.devis) {
+        const nextDevis = data.devis;
+        setCurrentDevis((prev) => computeDevisTotals({
+          ...prev,
+          ...nextDevis,
+          status: nextDevis.status ?? prev?.status ?? "draft",
+        }));
+      }
+
       addMessage({ role: "assistant", content: data.message, action: data.action });
     } catch {
       addMessage({
         role: "assistant",
         content: isRenovation
-          ? "Parfait ! Taux de TVA 3% appliqué pour la rénovation de logement principal."
-          : "D'accord, taux standard 17% appliqué.",
+          ? t("chat.tva.confirm.reduced", lang)
+          : t("chat.tva.confirm.standard", lang),
         action: "confirm",
       });
     } finally {
@@ -154,15 +163,11 @@ export default function HomePage() {
 
   const handleChangeTva = (rate: number) => {
     if (!currentDevis) return;
-    const subtotal = currentDevis.subtotal ?? 0;
-    const tvaAmount = +(subtotal * rate / 100).toFixed(2);
-    setCurrentDevis({
+    setCurrentDevis(computeDevisTotals({
       ...currentDevis,
       tvaRate: rate,
-      tvaAmount,
-      total: +(subtotal + tvaAmount).toFixed(2),
       isRenovationPrincipal: rate === 3,
-    });
+    }));
   };
 
   const handleGeneratePdf = async () => {
@@ -181,7 +186,7 @@ export default function HomePage() {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const docType = currentDevis.type === "facture" ? "Facture" : "Devis";
+      const docType = currentDevis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
       const num = currentDevis.number ?? format(new Date(), "yyyyMMdd");
       a.href = url;
       a.download = `${docType}_${num}.pdf`;
@@ -190,18 +195,86 @@ export default function HomePage() {
 
       addMessage({
         role: "assistant",
-        content: `Le PDF "${docType}_${num}.pdf" a été généré et téléchargé avec succès !`,
+        content: tf("chat.pdf.success", lang, { filename: `${docType}_${num}.pdf` }),
         action: "none",
       });
     } catch {
       addMessage({
         role: "assistant",
-        content: "Erreur lors de la génération du PDF. Veuillez réessayer.",
+        content: t("chat.pdf.error", lang),
         action: "none",
       });
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+
+  const buildPdfBlob = async () => {
+    if (!currentDevis) return null;
+
+    const res = await fetch("/api/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devis: currentDevis, artisanProfile, language: lang }),
+    });
+
+    if (!res.ok) {
+      throw new Error("PDF generation failed");
+    }
+
+    return res.blob();
+  };
+
+  const handlePrintPdf = async () => {
+    if (!currentDevis || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+
+    try {
+      const blob = await buildPdfBlob();
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (printWindow) {
+        printWindow.addEventListener("load", () => {
+          printWindow.print();
+        });
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleSendDevis = () => {
+    if (!currentDevis?.client?.name) return;
+
+    const docType = currentDevis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
+    const docTypeLower = docType.toLowerCase();
+    const number = currentDevis.number ?? format(new Date(), "yyyyMMdd");
+    const subject = encodeURIComponent(tf("devis.emailSubject", lang, { docType, number }));
+    const body = tf("devis.emailBody", lang, {
+      client: currentDevis.client.name,
+      docTypeLower,
+      number,
+      company: artisanProfile.company,
+    });
+    const email = currentDevis.client.email ?? "";
+
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  };
+
+  const handleSignatureSave = (signatureDataUrl: string, signerName: string) => {
+    if (!currentDevis) return;
+
+    setCurrentDevis({
+      ...currentDevis,
+      signatureDataUrl,
+      signerName,
+      signedAt: new Date().toISOString(),
+    });
   };
 
   const handleNewChat = () => {
@@ -218,90 +291,65 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 bg-slate-900 flex flex-col">
-        {/* Logo */}
-        <div className="px-5 py-4 border-b border-slate-700">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm leading-none">AI-Artisan</p>
-              <p className="text-slate-400 text-xs">Luxembourg</p>
-            </div>
+    <div className="flex h-screen bg-lavender-100">
+      {/* Column: header + chat */}
+      <div className={`flex-1 flex flex-col min-w-0 ${currentDevis ? "" : "max-w-[760px] w-full mx-auto md:my-3 md:rounded-[28px] md:border md:border-lavender-200 md:overflow-hidden md:bg-lavender-100"}`}>
+
+        {/* ── Top header ── */}
+        <header className="flex items-center justify-between px-5 py-3.5 md:px-7 md:pt-5 flex-shrink-0">
+          {/* Avatar profil artisan */}
+          <div className="w-11 h-11 rounded-full bg-slate-800 flex items-center justify-center shadow-md">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+            </svg>
           </div>
-        </div>
 
-        {/* Artisan info */}
-        <div className="px-4 py-3 border-b border-slate-700">
-          <p className="text-slate-400 text-xs mb-1">Artisan</p>
-          <p className="text-white text-sm font-medium truncate">{artisanProfile.company}</p>
-          <p className="text-slate-400 text-xs truncate">{artisanProfile.tvaNumber}</p>
-        </div>
+          {/* Wordmark */}
+          <h1 className="text-xl font-bold italic text-brand-500 tracking-tight">AI-Artisan</h1>
 
-        {/* Language selector */}
-        <div className="px-4 py-3 border-b border-slate-700">
-          <p className="text-slate-400 text-xs mb-2">Langue / Language</p>
-          <div className="flex flex-col gap-1">
-            {LANGUAGES.map((l) => (
-              <button
-                key={l}
-                onClick={() => handleLangChange(l)}
-                className={`text-left text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                  lang === l
-                    ? "bg-brand-600 text-white"
-                    : "text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                {getLanguageLabel(l)}
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Language cycle pill */}
+          <button
+            onClick={() => handleLangChange(LANGUAGES[(LANGUAGES.indexOf(lang) + 1) % LANGUAGES.length])}
+            className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-white shadow-sm rounded-full px-4 py-2 text-sm font-medium text-slate-600 hover:bg-white transition-colors"
+          >
+            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+            {lang.toUpperCase()}
+          </button>
+        </header>
 
-        {/* TVA reminder */}
-        <div className="px-4 py-3 mt-auto border-t border-slate-700">
-          <p className="text-slate-500 text-xs leading-relaxed">
-            TVA Luxembourg : 17% · 14% · 8% · <span className="text-green-400 font-medium">3%*</span>
-            <br />
-            <span className="text-slate-600">* Rénovation logement principal</span>
-          </p>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex-1 flex min-w-0">
-        {/* Chat */}
-        <div className="flex-1 min-w-0">
+        {/* ── Chat ── */}
+        <div className="flex-1 min-h-0">
           <ChatInterface
             messages={messages}
             isTyping={isTyping}
             input={input}
             lang={lang}
+            priceCatalog={priceCatalog}
             onInputChange={setInput}
-            onSend={() => send()}
+            onSend={send}
             onNewChat={handleNewChat}
             onTvaChoice={handleTvaChoice}
           />
         </div>
-
-        {/* Devis Panel */}
-        {currentDevis && (
-          <div className="w-96 flex-shrink-0 border-l border-slate-200">
-            <DevisPreview
-              devis={currentDevis}
-              lang={lang}
-              onGeneratePdf={handleGeneratePdf}
-              onChangeTva={handleChangeTva}
-              isGenerating={isGeneratingPdf}
-            />
-          </div>
-        )}
       </div>
+
+      {/* ── Devis panel (desktop) ── */}
+      {currentDevis && (
+        <div className="hidden lg:flex w-96 flex-shrink-0 flex-col bg-white border-l border-lavender-200 shadow-lg">
+          <DevisPreview
+            devis={currentDevis}
+            lang={lang}
+            onGeneratePdf={handleGeneratePdf}
+            onPrintPdf={handlePrintPdf}
+            onSendDevis={handleSendDevis}
+            onSaveSignature={handleSignatureSave}
+            onChangeTva={handleChangeTva}
+            isGenerating={isGeneratingPdf}
+          />
+        </div>
+      )}
     </div>
   );
 }

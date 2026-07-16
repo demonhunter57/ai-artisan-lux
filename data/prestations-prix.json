@@ -1,0 +1,30 @@
+{
+  "currency": "EUR",
+  "updatedAt": "2026-03-30",
+  "items": [
+    {
+      "reference": "PEINT-MUR-BLANC",
+      "description": "Peinture murs intérieurs blanc mat",
+      "unit": "m2",
+      "unitPrice": 28.5
+    },
+    {
+      "reference": "PLINTHES-POSE",
+      "description": "Pose de plinthes MDF",
+      "unit": "ml",
+      "unitPrice": 12
+    },
+    {
+      "reference": "ELECT-PRISE-STD",
+      "description": "Fourniture et pose prise électrique standard",
+      "unit": "u",
+      "unitPrice": 85
+    },
+    {
+      "reference": "PLOMB-DEPANNAGE",
+      "description": "Intervention depannage plomberie",
+      "unit": "h",
+      "unitPrice": 75
+    }
+  ]
+}

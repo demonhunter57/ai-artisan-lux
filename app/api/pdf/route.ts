@@ -2,24 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { PdfDocument } from "@/components/PdfDocument";
 import { Devis, ArtisanProfile, Language } from "@/lib/types";
+import { t } from "@/lib/i18n";
 import React from "react";
 import { format } from "date-fns";
+import { computeDevisTotals } from "@/lib/devis";
+import { logError, logInfo } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+  let lang: Language = "fr";
+
   try {
     const { devis, artisanProfile, language } = await req.json() as {
       devis: Partial<Devis>;
       artisanProfile: ArtisanProfile;
       language: Language;
     };
+    lang = language ?? "fr";
 
     // Validate required fields
-    if (!devis.client?.name || !devis.items?.length) {
+    if (!artisanProfile || !devis.client?.name || !devis.items?.length) {
+      logInfo("Invalid PDF payload", {
+        requestId,
+        route: "/api/pdf",
+      });
       return NextResponse.json(
-        { error: "Client et articles requis pour générer le PDF" },
-        { status: 400 }
+        { error: t("api.pdf.error.invalidPayload", lang) },
+        { status: 400, headers: { "x-request-id": requestId } }
       );
     }
+
+    const normalizedDevis = computeDevisTotals({
+      ...devis,
+      tvaRate: devis.tvaRate ?? 17,
+    });
 
     // Build complete Devis object with defaults
     const fullDevis: Devis = {
@@ -32,22 +48,16 @@ export async function POST(req: NextRequest) {
       dueDate: devis.dueDate,
       number: devis.number ?? `${devis.type === "facture" ? "F" : "D"}-${format(new Date(), "yyyyMMdd-HHmm")}`,
       client: devis.client,
-      items: devis.items,
-      tvaRate: devis.tvaRate ?? 17,
-      subtotal: devis.subtotal ?? devis.items.reduce((s, i) => s + i.total, 0),
-      tvaAmount: devis.tvaAmount ?? 0,
-      total: devis.total ?? 0,
+      items: normalizedDevis.items ?? [],
+      tvaRate: normalizedDevis.tvaRate ?? 17,
+      subtotal: normalizedDevis.subtotal ?? 0,
+      tvaAmount: normalizedDevis.tvaAmount ?? 0,
+      total: normalizedDevis.total ?? 0,
       notes: devis.notes,
       status: devis.status ?? "draft",
       isRenovationPrincipal: devis.isRenovationPrincipal ?? false,
       language: language,
     };
-
-    // Recalculate if needed
-    if (!devis.tvaAmount) {
-      fullDevis.tvaAmount = +(fullDevis.subtotal * fullDevis.tvaRate / 100).toFixed(2);
-      fullDevis.total = +(fullDevis.subtotal + fullDevis.tvaAmount).toFixed(2);
-    }
 
     const pdfBuffer = await renderToBuffer(
       React.createElement(PdfDocument, {
@@ -57,22 +67,24 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    const docType = fullDevis.type === "facture" ? "Facture" : "Devis";
+    const docType = fullDevis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
     const filename = `${docType}_${fullDevis.number}.pdf`;
+    const pdfBytes = new Uint8Array(pdfBuffer);
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBytes, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": pdfBuffer.length.toString(),
+        "Content-Length": pdfBytes.byteLength.toString(),
+        "x-request-id": requestId,
       },
     });
   } catch (err) {
-    console.error("PDF generation error:", err);
+    logError("PDF generation error", err, { requestId, route: "/api/pdf" });
     return NextResponse.json(
-      { error: "Erreur lors de la génération du PDF" },
-      { status: 500 }
+      { error: t("api.pdf.error.generation", lang) },
+      { status: 500, headers: { "x-request-id": requestId } }
     );
   }
 }

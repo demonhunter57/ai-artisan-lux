@@ -1,9 +1,109 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { ClaudeResponse, Language, Devis } from "@/lib/types";
+import { ClaudeResponse, Language } from "@/lib/types";
+import { t } from "@/lib/i18n";
+import priceCatalogData from "@/data/prestations-prix.json";
 import { format } from "date-fns";
+import { z } from "zod";
+import { computeDevisTotals } from "@/lib/devis";
+import { logError, logInfo } from "@/lib/logger";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const priceCatalog = priceCatalogData;
+
+function normalizePromptProfile(profile: Record<string, string | null>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(profile).map(([key, value]) => [key, value ?? ""])
+  );
+}
+
+function getUserFacingChatError(error: unknown, lang: Language): string {
+  if (!(error instanceof Error)) {
+    return t("api.chat.error.service", lang);
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes("credit balance is too low") || message.includes("billing")) {
+    return t("api.chat.error.billing", lang);
+  }
+
+  if (message.includes("api key") || message.includes("authentication")) {
+    return t("api.chat.error.auth", lang);
+  }
+
+  return t("api.chat.error.service", lang);
+}
+
+const ActionSchema = z.enum(["none", "show_preview", "ask_tva", "confirm", "generate_pdf"]);
+
+const DevisItemSchema = z.object({
+  description: z.string(),
+  quantity: z.coerce.number(),
+  unit: z.string(),
+  unitPrice: z.coerce.number(),
+  total: z.coerce.number().optional(),
+}).transform((item) => ({
+  ...item,
+  total: item.total ?? +(item.quantity * item.unitPrice).toFixed(2),
+}));
+
+const ClientSchema = z.object({
+  name: z.string().min(1),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  postal: z.string().optional(),
+  country: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  tvaNumber: z.string().optional(),
+});
+
+const DevisSchema = z.object({
+  id: z.string().optional(),
+  number: z.string().optional(),
+  type: z.enum(["devis", "facture"]).optional(),
+  date: z.string().optional(),
+  validUntil: z.string().optional(),
+  dueDate: z.string().optional(),
+  client: ClientSchema.optional(),
+  items: z.array(DevisItemSchema).optional(),
+  tvaRate: z.coerce.number().optional(),
+  subtotal: z.coerce.number().optional(),
+  tvaAmount: z.coerce.number().optional(),
+  total: z.coerce.number().optional(),
+  notes: z.string().optional(),
+  status: z.enum(["draft", "sent", "validated", "paid", "overdue", "cancelled"]).optional(),
+  isRenovationPrincipal: z.boolean().optional(),
+});
+
+const ClaudeResponseSchema = z.object({
+  message: z.string().min(1),
+  action: ActionSchema.default("none"),
+  devis: DevisSchema.optional(),
+});
+
+const ChatPayloadSchema = z.object({
+  message: z.string().min(1),
+  history: z.array(z.object({ role: z.string(), content: z.string() })).optional(),
+  language: z.enum(["fr", "en", "lb"]).optional(),
+  currentDevis: z.record(z.string(), z.unknown()).nullable().optional(),
+  artisanProfile: z.record(z.string(), z.union([z.string(), z.null()])),
+});
+
+function extractJsonText(rawText: string): string {
+  const fencedMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1];
+  }
+
+  const objectMatch = rawText.match(/\{[\s\S]*\}/);
+  if (objectMatch?.[0]) {
+    return objectMatch[0];
+  }
+
+  return rawText;
+}
 
 function buildSystemPrompt(language: Language, artisanProfile: Record<string, string>, today: string): string {
   const langInstructions: Record<Language, string> = {
@@ -11,6 +111,10 @@ function buildSystemPrompt(language: Language, artisanProfile: Record<string, st
     en: "Always reply in ENGLISH.",
     lb: "Äntwert ëmmer op LËTZEBUERGESCH (Luxembourgish). If uncertain about a word, use French.",
   };
+
+  const catalogLines = priceCatalog.items
+    .map((item) => `- ${item.reference}: ${item.description} | unité ${item.unit} | prix ${item.unitPrice} ${priceCatalog.currency}`)
+    .join("\n");
 
   return `Tu es AI-Artisan, un assistant intelligent spécialisé dans la création de devis et de factures pour les artisans du bâtiment au Luxembourg.
 
@@ -43,6 +147,11 @@ ${langInstructions[language]}
 
 ## UNITÉS COURANTES
 m², ml (mètre linéaire), m³, h (heure), j (jour), u (unité), forfait
+
+## CATALOGUE TARIFAIRE ARTISAN
+Utilise en priorité ces prestations et ces prix lorsqu'elles correspondent à la demande utilisateur.
+Si une prestation du catalogue correspond clairement, reprends son descriptif et son prix unitaire exact.
+${catalogLines}
 
 ## FORMAT DE RÉPONSE JSON OBLIGATOIRE
 Réponds TOUJOURS en JSON valide avec cette structure exacte :
@@ -108,18 +217,47 @@ Réponds TOUJOURS en JSON valide avec cette structure exacte :
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+  let requestLang: Language = "fr";
+
   try {
-    const { message, history, language, currentDevis, artisanProfile } = await req.json();
+    if (!process.env.ANTHROPIC_API_KEY) {
+      logError("Anthropic API key missing", new Error("Missing ANTHROPIC_API_KEY"), {
+        requestId,
+        route: "/api/chat",
+      });
+      return NextResponse.json(
+        { message: t("api.chat.error.missingKey", requestLang), action: "none" },
+        { status: 500, headers: { "x-request-id": requestId } }
+      );
+    }
+
+    const payloadValidation = ChatPayloadSchema.safeParse(await req.json());
+    if (!payloadValidation.success) {
+      logInfo("Invalid chat payload", {
+        requestId,
+        route: "/api/chat",
+        issues: payloadValidation.error.issues,
+      });
+      return NextResponse.json(
+        { message: t("api.chat.error.invalidMessage", requestLang), action: "none" },
+        { status: 400, headers: { "x-request-id": requestId } }
+      );
+    }
+
+    const { message, history, language, currentDevis, artisanProfile } = payloadValidation.data;
+    requestLang = language ?? "fr";
+
     const today = format(new Date(), "yyyy-MM-dd");
     const lang: Language = language ?? "fr";
 
-    const systemPrompt = buildSystemPrompt(lang, artisanProfile, today);
+    const systemPrompt = buildSystemPrompt(lang, normalizePromptProfile(artisanProfile), today);
 
     // Build conversation history for Claude
-    const historyMessages = (history ?? []).slice(-10).map((m: { role: string; content: string }) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+    const historyMessages = (history ?? [])
+      .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+      .slice(-10)
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     // Add context about current devis if exists
     let userContent = message;
@@ -137,41 +275,49 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    const rawText = response.content[0].type === "text" ? response.content[0].text : "";
+    const textBlock = response.content.find((block) => block.type === "text");
+    const rawText = textBlock?.type === "text" ? textBlock.text : "";
 
     // Parse JSON from response (handle markdown code blocks)
     let parsed: ClaudeResponse;
     try {
-      const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/) ?? rawText.match(/(\{[\s\S]*\})/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : rawText;
-      parsed = JSON.parse(jsonStr);
+      const jsonStr = extractJsonText(rawText);
+      const parsedCandidate = JSON.parse(jsonStr);
+      const validation = ClaudeResponseSchema.safeParse(parsedCandidate);
+
+      if (!validation.success) {
+        parsed = { message: rawText || t("api.chat.error.parse", requestLang), action: "none" };
+      } else {
+        parsed = validation.data;
+      }
     } catch {
+      logInfo("Chat response JSON parsing failed", {
+        requestId,
+        route: "/api/chat",
+      });
       // If parsing fails, return plain message
       parsed = {
-        message: rawText,
+        message: rawText || t("api.chat.error.parse", requestLang),
         action: "none",
       };
     }
 
     // Validate and clean devis
-    if (parsed.devis?.items) {
-      parsed.devis.items = parsed.devis.items.map((item) => ({
-        ...item,
-        total: +(item.quantity * item.unitPrice).toFixed(2),
-      }));
-      const subtotal = parsed.devis.items.reduce((s, i) => s + i.total, 0);
-      const tvaRate = parsed.devis.tvaRate ?? 17;
-      parsed.devis.subtotal = +subtotal.toFixed(2);
-      parsed.devis.tvaAmount = +(subtotal * tvaRate / 100).toFixed(2);
-      parsed.devis.total = +(subtotal + parsed.devis.tvaAmount).toFixed(2);
+    if (parsed.devis) {
+      const normalizedDevis = computeDevisTotals({
+        ...parsed.devis,
+        date: parsed.devis.date ?? today,
+        status: parsed.devis.status ?? "draft",
+      });
+      parsed.devis = normalizedDevis;
     }
 
-    return NextResponse.json(parsed);
+    return NextResponse.json(parsed, { headers: { "x-request-id": requestId } });
   } catch (err) {
-    console.error("Chat API error:", err);
+    logError("Chat API error", err, { requestId, route: "/api/chat" });
     return NextResponse.json(
-      { message: "Une erreur est survenue. Vérifiez votre clé API.", action: "none" },
-      { status: 500 }
+      { message: getUserFacingChatError(err, requestLang), action: "none" },
+      { status: 500, headers: { "x-request-id": requestId } }
     );
   }
 }

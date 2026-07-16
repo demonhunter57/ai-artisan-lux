@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Document, Page, Text, View, StyleSheet, Font,
+  Document, Page, Text, View, StyleSheet, Image,
 } from "@react-pdf/renderer";
 import { ArtisanProfile, Devis, Language } from "@/lib/types";
 import { t } from "@/lib/i18n";
@@ -205,6 +205,37 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: "#78350f",
   },
+  signatureBlock: {
+    marginTop: 20,
+    width: 180,
+  },
+  signatureTitle: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  signatureBox: {
+    height: 70,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 4,
+    padding: 6,
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+  signatureImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+  signatureMeta: {
+    fontSize: 8,
+    color: "#64748b",
+    marginTop: 4,
+  },
   // Payment & Legal
   footer: {
     position: "absolute",
@@ -403,6 +434,21 @@ export function PdfDocument({ devis, artisan, language }: Props) {
           <View style={styles.notesBlock}>
             <Text style={styles.notesLabel}>{t("devis.notes", language)}</Text>
             <Text style={styles.notesText}>{devis.notes}</Text>
+          </View>
+        )}
+
+        {devis.signatureDataUrl && (
+          <View style={styles.signatureBlock}>
+            <Text style={styles.signatureTitle}>{t("devis.signatureBlock", language)}</Text>
+            <View style={styles.signatureBox}>
+              <Image src={devis.signatureDataUrl} style={styles.signatureImage} />
+            </View>
+            {devis.signerName && <Text style={styles.signatureMeta}>{devis.signerName}</Text>}
+            {devis.signedAt && (
+              <Text style={styles.signatureMeta}>
+                {t("devis.signatureDate", language)}: {formatDate(devis.signedAt)}
+              </Text>
+            )}
           </View>
         )}
 
