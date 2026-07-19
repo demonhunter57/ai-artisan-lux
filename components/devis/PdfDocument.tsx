@@ -2,8 +2,8 @@ import React from "react";
 import {
   Document, Page, Text, View, StyleSheet, Image,
 } from "@react-pdf/renderer";
-import { ArtisanProfile, Devis, Language } from "@/lib/types";
-import { t } from "@/lib/i18n";
+import { ArtisanProfile, Devis, Language } from "@/types";
+import { t } from "@/i18n";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 
@@ -441,6 +441,7 @@ export function PdfDocument({ devis, artisan, language }: Props) {
           <View style={styles.signatureBlock}>
             <Text style={styles.signatureTitle}>{t("devis.signatureBlock", language)}</Text>
             <View style={styles.signatureBox}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer's Image (PDF output) has no alt prop */}
               <Image src={devis.signatureDataUrl} style={styles.signatureImage} />
             </View>
             {devis.signerName && <Text style={styles.signatureMeta}>{devis.signerName}</Text>}

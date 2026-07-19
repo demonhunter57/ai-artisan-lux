@@ -20,10 +20,39 @@ Chaque document PDF inclut automatiquement :
 
 ## Stack technique
 
-- **Next.js 14** — App Router + TypeScript
+- **Next.js 16** — App Router + TypeScript
 - **Claude (Anthropic)** — Traitement du langage naturel
 - **@react-pdf/renderer** — Génération PDF côté serveur
 - **Tailwind CSS** — Interface utilisateur
+
+## Structure du projet
+
+```
+├── app/
+│   ├── page.tsx              # Page principale (chat)
+│   ├── layout.tsx            # Layout racine
+│   └── api/
+│       ├── chat/route.ts     # API Claude (traitement des messages)
+│       └── pdf/route.ts      # API génération PDF
+├── components/
+│   ├── chat/ChatInterface.tsx    # Interface de chat
+│   └── devis/
+│       ├── DevisPreview.tsx      # Panneau aperçu du devis
+│       └── PdfDocument.tsx       # Template PDF Luxembourg
+├── hooks/
+│   └── useDevisChat.ts       # État et logique du chat/devis
+├── lib/
+│   ├── devis.ts               # Calcul des totaux devis
+│   ├── logger.ts              # Logging structuré
+│   └── ai/
+│       ├── prompt.ts          # Prompt système Claude
+│       └── schemas.ts         # Schémas de validation Zod
+├── types/                     # Types TypeScript par domaine
+├── i18n/                      # Traductions FR/EN/LB
+├── constants/                 # Constantes partagées (TVA, langues)
+└── data/
+    └── artisan-profile.json  # Profil artisan (à personnaliser)
+```
 
 ## Installation
 

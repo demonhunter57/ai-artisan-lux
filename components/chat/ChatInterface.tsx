@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef } from "react";
-import { ChatMessage, Language, PriceCatalog } from "@/lib/types";
-import { t, tf } from "@/lib/i18n";
+import { ChatMessage, Language, PriceCatalog } from "@/types";
+import { t, tf } from "@/i18n";
 import { format } from "date-fns";
 
 interface Props {
