@@ -28,10 +28,38 @@ describe("computeDevisTotals", () => {
     expect(result.total).toBe(117);
   });
 
-  it("retourne l'objet tel quel s'il n'y a pas d'items", () => {
-    const input = { type: "devis" as const };
-    const result = computeDevisTotals(input);
+  it("remet les totaux a zero quand il n'y a pas d'items", () => {
+    const result = computeDevisTotals({ type: "devis" });
 
-    expect(result).toEqual(input);
+    expect(result.items).toEqual([]);
+    expect(result.subtotal).toBe(0);
+    expect(result.tvaAmount).toBe(0);
+    expect(result.total).toBe(0);
+  });
+
+  it("remet les totaux a zero quand tous les items sont supprimes", () => {
+    const withItems = computeDevisTotals({
+      tvaRate: 17,
+      items: [{ description: "Peinture", quantity: 10, unit: "m2", unitPrice: 12, total: 0 }],
+    });
+    expect(withItems.total).toBeGreaterThan(0);
+
+    const cleared = computeDevisTotals({ ...withItems, items: [] });
+    expect(cleared.subtotal).toBe(0);
+    expect(cleared.tvaAmount).toBe(0);
+    expect(cleared.total).toBe(0);
+  });
+
+  it("ramene a zero les quantites et prix negatifs ou invalides", () => {
+    const result = computeDevisTotals({
+      items: [
+        { description: "Item negatif", quantity: -5, unit: "u", unitPrice: 10, total: 0 },
+        { description: "Item NaN", quantity: 2, unit: "u", unitPrice: NaN, total: 0 },
+      ],
+    });
+
+    expect(result.items?.[0].quantity).toBe(0);
+    expect(result.items?.[1].unitPrice).toBe(0);
+    expect(result.subtotal).toBe(0);
   });
 });

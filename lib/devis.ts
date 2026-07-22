@@ -1,20 +1,23 @@
-import { Devis, DevisItem } from "@/lib/types";
+import { Devis, DevisItem } from "@/types";
+import { DEFAULT_TVA_RATE } from "@/constants/tva";
+
+function clampNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
 
 export function normalizeDevisItems(items: DevisItem[]): DevisItem[] {
   return items.map((item) => {
-    const total = +(item.quantity * item.unitPrice).toFixed(2);
-    return { ...item, total };
+    const quantity = clampNonNegative(item.quantity);
+    const unitPrice = clampNonNegative(item.unitPrice);
+    const total = +(quantity * unitPrice).toFixed(2);
+    return { ...item, quantity, unitPrice, total };
   });
 }
 
 export function computeDevisTotals(devis: Partial<Devis>): Partial<Devis> {
-  if (!devis.items?.length) {
-    return devis;
-  }
-
-  const items = normalizeDevisItems(devis.items);
+  const items = normalizeDevisItems(devis.items ?? []);
   const subtotal = +items.reduce((sum, item) => sum + item.total, 0).toFixed(2);
-  const tvaRate = devis.tvaRate ?? 17;
+  const tvaRate = devis.tvaRate ?? DEFAULT_TVA_RATE;
   const tvaAmount = +(subtotal * tvaRate / 100).toFixed(2);
 
   return {

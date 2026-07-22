@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { PdfDocument } from "@/components/PdfDocument";
-import { Devis, ArtisanProfile, Language } from "@/lib/types";
-import { t } from "@/lib/i18n";
+import { PdfDocument } from "@/components/devis/PdfDocument";
+import { Devis, Language } from "@/types";
+import { t } from "@/i18n";
 import React from "react";
 import { format } from "date-fns";
 import { computeDevisTotals } from "@/lib/devis";
 import { logError, logInfo } from "@/lib/logger";
+import { PdfPayloadSchema } from "@/lib/ai/schemas";
+import { DEFAULT_TVA_RATE } from "@/constants/tva";
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
   let lang: Language = "fr";
 
   try {
-    const { devis, artisanProfile, language } = await req.json() as {
-      devis: Partial<Devis>;
-      artisanProfile: ArtisanProfile;
-      language: Language;
-    };
-    lang = language ?? "fr";
-
-    // Validate required fields
-    if (!artisanProfile || !devis.client?.name || !devis.items?.length) {
+    const payloadValidation = PdfPayloadSchema.safeParse(await req.json());
+    if (!payloadValidation.success) {
       logInfo("Invalid PDF payload", {
         requestId,
         route: "/api/pdf",
+        issues: payloadValidation.error.issues,
       });
       return NextResponse.json(
         { error: t("api.pdf.error.invalidPayload", lang) },
@@ -32,9 +28,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { devis, artisanProfile, language } = payloadValidation.data;
+    lang = language ?? "fr";
+
     const normalizedDevis = computeDevisTotals({
       ...devis,
-      tvaRate: devis.tvaRate ?? 17,
+      tvaRate: devis.tvaRate ?? DEFAULT_TVA_RATE,
     });
 
     // Build complete Devis object with defaults
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
       number: devis.number ?? `${devis.type === "facture" ? "F" : "D"}-${format(new Date(), "yyyyMMdd-HHmm")}`,
       client: devis.client,
       items: normalizedDevis.items ?? [],
-      tvaRate: normalizedDevis.tvaRate ?? 17,
+      tvaRate: normalizedDevis.tvaRate ?? DEFAULT_TVA_RATE,
       subtotal: normalizedDevis.subtotal ?? 0,
       tvaAmount: normalizedDevis.tvaAmount ?? 0,
       total: normalizedDevis.total ?? 0,
