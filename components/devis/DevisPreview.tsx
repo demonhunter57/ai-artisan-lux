@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Devis, Language } from "@/lib/types";
-import { t } from "@/lib/i18n";
+import { useState } from "react";
+import Image from "next/image";
+import { Devis, Language } from "@/types";
+import { t } from "@/i18n";
+import { DEFAULT_TVA_RATE, TVA_RATES } from "@/constants/tva";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
+import SignaturePad from "./SignaturePad";
 
 interface Props {
   devis: Partial<Devis>;
@@ -31,42 +34,6 @@ export default function DevisPreview({
 }: Props) {
   const dateLocale = localeMap[lang];
   const [activeTab, setActiveTab] = useState<"actions" | "signature">("actions");
-  const [signerName, setSignerName] = useState(devis.signerName ?? "");
-  const [signatureMessage, setSignatureMessage] = useState("");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawingRef = useRef(false);
-
-  useEffect(() => {
-    setSignerName(devis.signerName ?? "Benoit MICHEL");
-  }, [devis.signerName]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ratio = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#1e293b";
-
-    if (devis.signatureDataUrl) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, rect.width, rect.height);
-        ctx.drawImage(img, 0, 0, rect.width, rect.height);
-      };
-      img.src = devis.signatureDataUrl;
-    } else {
-      ctx.clearRect(0, 0, rect.width, rect.height);
-    }
-  }, [devis.signatureDataUrl, activeTab]);
 
   const formatDate = (d?: string) =>
     d ? format(new Date(d), "dd/MM/yyyy", { locale: dateLocale }) : "—";
@@ -77,70 +44,10 @@ export default function DevisPreview({
       : "—";
 
   const docLabel = devis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
-  const tvaOptions = [
-    { value: 3, label: t("devis.tva.option.3", lang) },
-    { value: 8, label: t("devis.tva.option.8", lang) },
-    { value: 14, label: t("devis.tva.option.14", lang) },
-    { value: 17, label: t("devis.tva.option.17", lang) },
-  ];
-
-  const pointerPosition = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  };
-
-  const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    const position = pointerPosition(event);
-    if (!canvas || !position) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    drawingRef.current = true;
-    ctx.beginPath();
-    ctx.moveTo(position.x, position.y);
-  };
-
-  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    const position = pointerPosition(event);
-    if (!canvas || !position || !drawingRef.current) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.lineTo(position.x, position.y);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    drawingRef.current = false;
-  };
-
-  const clearSignature = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    setSignatureMessage("");
-  };
-
-  const saveSignature = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL("image/png");
-    if (dataUrl.length < 3000) {
-      setSignatureMessage(t("devis.signatureMissing", lang));
-      return;
-    }
-
-    onSaveSignature(dataUrl, signerName.trim());
-    setSignatureMessage(t("devis.signatureSaved", lang));
-  };
+  const tvaOptions = TVA_RATES.map((rate) => ({
+    value: rate.value,
+    label: t(`devis.tva.option.${rate.value}`, lang),
+  }));
 
   return (
     <div className="flex flex-col h-full bg-white border-l border-slate-200">
@@ -261,7 +168,7 @@ export default function DevisPreview({
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-500">{t("devis.tva", lang)}</span>
               <select
-                value={devis.tvaRate ?? 17}
+                value={devis.tvaRate ?? DEFAULT_TVA_RATE}
                 onChange={(e) => onChangeTva(Number(e.target.value))}
                 className="text-sm border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
@@ -277,7 +184,7 @@ export default function DevisPreview({
                 <span>{fmt(devis.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm text-slate-600">
-                <span>{t("devis.tva", lang)} {devis.tvaRate ?? 17}%</span>
+                <span>{t("devis.tva", lang)} {devis.tvaRate ?? DEFAULT_TVA_RATE}%</span>
                 <span>{fmt(devis.tvaAmount)}</span>
               </div>
               {devis.isRenovationPrincipal && (
@@ -302,8 +209,14 @@ export default function DevisPreview({
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               {t("devis.signatureBlock", lang)}
             </p>
-            <div className="rounded-lg bg-white border border-slate-200 p-3">
-              <img src={devis.signatureDataUrl} alt={t("devis.signatureBlock", lang)} className="h-20 w-full object-contain" />
+            <div className="relative h-20 rounded-lg bg-white border border-slate-200 p-3">
+              <Image
+                src={devis.signatureDataUrl}
+                alt={t("devis.signatureBlock", lang)}
+                fill
+                unoptimized
+                className="object-contain"
+              />
             </div>
             <div className="mt-2 text-xs text-slate-500 space-y-1">
               {devis.signerName && <p>{devis.signerName}</p>}
@@ -388,50 +301,12 @@ export default function DevisPreview({
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">{t("devis.signatureTitle", lang)}</p>
-              <p className="text-xs text-slate-400 mt-1">{t("devis.signatureSubtitle", lang)}</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">{t("devis.signerName", lang)}</label>
-              <input
-                value={signerName}
-                onChange={(e) => setSignerName(e.target.value)}
-                placeholder={t("devis.signaturePlaceholder", lang)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400"
-              />
-            </div>
-
-            <canvas
-              ref={canvasRef}
-              onPointerDown={startDrawing}
-              onPointerMove={draw}
-              onPointerUp={stopDrawing}
-              onPointerLeave={stopDrawing}
-              className="h-40 w-full rounded-xl border border-dashed border-slate-300 bg-white touch-none"
-            />
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={clearSignature}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                {t("devis.clearSignature", lang)}
-              </button>
-              <button
-                onClick={saveSignature}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                {t("devis.saveSignature", lang)}
-              </button>
-            </div>
-
-            {signatureMessage && (
-              <p className="text-xs text-slate-500">{signatureMessage}</p>
-            )}
-          </div>
+          <SignaturePad
+            lang={lang}
+            signatureDataUrl={devis.signatureDataUrl}
+            initialSignerName={devis.signerName}
+            onSave={onSaveSignature}
+          />
         )}
       </div>
     </div>

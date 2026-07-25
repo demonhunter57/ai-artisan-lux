@@ -1,293 +1,51 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { v4 as uuid } from "uuid";
-import ChatInterface from "@/components/ChatInterface";
-import DevisPreview from "@/components/DevisPreview";
-import { ChatMessage, ClaudeResponse, Devis, Language, PriceCatalog } from "@/lib/types";
-import { t, tf } from "@/lib/i18n";
-import artisanProfile from "@/data/artisan-profile.json";
+import { useState } from "react";
+import ChatInterface from "@/components/chat/ChatInterface";
+import DevisPreview from "@/components/devis/DevisPreview";
+import { PriceCatalog } from "@/types";
 import priceCatalogData from "@/data/prestations-prix.json";
-import { format } from "date-fns";
-import { computeDevisTotals } from "@/lib/devis";
+import { LANGUAGES } from "@/constants/languages";
+import { useDevisChat } from "@/hooks/useDevisChat";
+import { t } from "@/i18n";
 
-const LANGUAGES: Language[] = ["fr", "en", "lb"];
 const priceCatalog = priceCatalogData as PriceCatalog;
 
-const makeWelcome = (lang: Language): ChatMessage => ({
-  id: uuid(),
-  role: "assistant",
-  content: t("chat.welcome", lang),
-  action: "none",
-  timestamp: new Date().toISOString(),
-});
-
 export default function HomePage() {
-  const [lang, setLang] = useState<Language>("fr");
-  const [messages, setMessages] = useState<ChatMessage[]>([makeWelcome("fr")]);
-  const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [currentDevis, setCurrentDevis] = useState<Partial<Devis> | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const {
+    lang,
+    messages,
+    input,
+    isTyping,
+    currentDevis,
+    isGeneratingPdf,
+    setInput,
+    send,
+    handleTvaChoice,
+    handleChangeTva,
+    handleGeneratePdf,
+    handlePrintPdf,
+    handleSendDevis,
+    handleSignatureSave,
+    handleNewChat,
+    handleLangChange,
+  } = useDevisChat("fr");
 
-  const addMessage = (msg: Omit<ChatMessage, "id" | "timestamp">) => {
-    const full: ChatMessage = {
-      ...msg,
-      id: uuid(),
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, full]);
-    return full;
-  };
+  const [showMobileDevis, setShowMobileDevis] = useState(false);
+  const [hadDevis, setHadDevis] = useState(false);
 
-  const send = useCallback(async (text?: string) => {
-    const userText = (text ?? input).trim();
-    if (!userText) return;
-    setInput("");
-
-    const userHistoryMessage = { role: "user", content: userText } as const;
-    addMessage(userHistoryMessage);
-    setIsTyping(true);
-
-    try {
-      const history = [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        userHistoryMessage,
-      ];
-
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userText,
-          history,
-          language: lang,
-          currentDevis,
-          artisanProfile,
-        }),
-      });
-
-      if (!res.ok) throw new Error("API error");
-      const data: ClaudeResponse = await res.json();
-
-      if (data.devis) {
-        const merged = computeDevisTotals({
-          ...currentDevis,
-          ...data.devis,
-          date: data.devis.date ?? format(new Date(), "yyyy-MM-dd"),
-          status: data.devis.status ?? "draft",
-        });
-
-        setCurrentDevis(merged);
-      }
-
-      addMessage({
-        role: "assistant",
-        content: data.message,
-        action: data.action,
-        devis: data.devis,
-      });
-    } catch {
-      addMessage({
-        role: "assistant",
-        content: t("chat.error.generic", lang),
-        action: "none",
-      });
-    } finally {
-      setIsTyping(false);
+  // Ouvre automatiquement le tiroir mobile la premiere fois qu'un devis apparait
+  const hasDevisNow = Boolean(currentDevis);
+  if (hasDevisNow !== hadDevis) {
+    setHadDevis(hasDevisNow);
+    if (hasDevisNow) {
+      setShowMobileDevis(true);
     }
-  }, [input, messages, lang, currentDevis]);
+  }
 
-  const handleTvaChoice = async (isRenovation: boolean) => {
-    const rate = isRenovation ? 3 : 17;
-    const label = isRenovation
-      ? t("tva.yes", lang)
-      : t("tva.no", lang);
-
-    const userHistoryMessage = { role: "user", content: label } as const;
-    addMessage(userHistoryMessage);
-
-    const updatedDevis = currentDevis
-      ? computeDevisTotals({
-        ...currentDevis,
-        tvaRate: rate,
-        isRenovationPrincipal: isRenovation,
-      })
-      : null;
-
-    if (updatedDevis) {
-      setCurrentDevis(updatedDevis);
-    }
-
-    setIsTyping(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: label,
-          history: [
-            ...messages.map((m) => ({ role: m.role, content: m.content })),
-            userHistoryMessage,
-          ],
-          language: lang,
-          currentDevis: updatedDevis ?? currentDevis,
-          artisanProfile,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      const data: ClaudeResponse = await res.json();
-
-      if (data.devis) {
-        const nextDevis = data.devis;
-        setCurrentDevis((prev) => computeDevisTotals({
-          ...prev,
-          ...nextDevis,
-          status: nextDevis.status ?? prev?.status ?? "draft",
-        }));
-      }
-
-      addMessage({ role: "assistant", content: data.message, action: data.action });
-    } catch {
-      addMessage({
-        role: "assistant",
-        content: isRenovation
-          ? t("chat.tva.confirm.reduced", lang)
-          : t("chat.tva.confirm.standard", lang),
-        action: "confirm",
-      });
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const handleChangeTva = (rate: number) => {
-    if (!currentDevis) return;
-    setCurrentDevis(computeDevisTotals({
-      ...currentDevis,
-      tvaRate: rate,
-      isRenovationPrincipal: rate === 3,
-    }));
-  };
-
-  const handleGeneratePdf = async () => {
-    if (!currentDevis || isGeneratingPdf) return;
-    setIsGeneratingPdf(true);
-
-    try {
-      const res = await fetch("/api/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ devis: currentDevis, artisanProfile, language: lang }),
-      });
-
-      if (!res.ok) throw new Error("PDF generation failed");
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const docType = currentDevis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
-      const num = currentDevis.number ?? format(new Date(), "yyyyMMdd");
-      a.href = url;
-      a.download = `${docType}_${num}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      addMessage({
-        role: "assistant",
-        content: tf("chat.pdf.success", lang, { filename: `${docType}_${num}.pdf` }),
-        action: "none",
-      });
-    } catch {
-      addMessage({
-        role: "assistant",
-        content: t("chat.pdf.error", lang),
-        action: "none",
-      });
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
-  const buildPdfBlob = async () => {
-    if (!currentDevis) return null;
-
-    const res = await fetch("/api/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ devis: currentDevis, artisanProfile, language: lang }),
-    });
-
-    if (!res.ok) {
-      throw new Error("PDF generation failed");
-    }
-
-    return res.blob();
-  };
-
-  const handlePrintPdf = async () => {
-    if (!currentDevis || isGeneratingPdf) return;
-    setIsGeneratingPdf(true);
-
-    try {
-      const blob = await buildPdfBlob();
-      if (!blob) return;
-
-      const url = URL.createObjectURL(blob);
-      const printWindow = window.open(url, "_blank", "noopener,noreferrer");
-
-      if (printWindow) {
-        printWindow.addEventListener("load", () => {
-          printWindow.print();
-        });
-      }
-
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
-  const handleSendDevis = () => {
-    if (!currentDevis?.client?.name) return;
-
-    const docType = currentDevis.type === "facture" ? t("pdf.facture", lang) : t("pdf.devis", lang);
-    const docTypeLower = docType.toLowerCase();
-    const number = currentDevis.number ?? format(new Date(), "yyyyMMdd");
-    const subject = encodeURIComponent(tf("devis.emailSubject", lang, { docType, number }));
-    const body = tf("devis.emailBody", lang, {
-      client: currentDevis.client.name,
-      docTypeLower,
-      number,
-      company: artisanProfile.company,
-    });
-    const email = currentDevis.client.email ?? "";
-
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-  };
-
-  const handleSignatureSave = (signatureDataUrl: string, signerName: string) => {
-    if (!currentDevis) return;
-
-    setCurrentDevis({
-      ...currentDevis,
-      signatureDataUrl,
-      signerName,
-      signedAt: new Date().toISOString(),
-    });
-  };
-
-  const handleNewChat = () => {
-    setMessages([makeWelcome(lang)]);
-    setCurrentDevis(null);
-    setInput("");
-  };
-
-  const handleLangChange = (newLang: Language) => {
-    setLang(newLang);
-    if (messages.length === 1) {
-      setMessages([makeWelcome(newLang)]);
-    }
+  const onNewChat = () => {
+    handleNewChat();
+    setShowMobileDevis(false);
   };
 
   return (
@@ -329,10 +87,23 @@ export default function HomePage() {
             priceCatalog={priceCatalog}
             onInputChange={setInput}
             onSend={send}
-            onNewChat={handleNewChat}
+            onNewChat={onNewChat}
             onTvaChoice={handleTvaChoice}
           />
         </div>
+
+        {/* ── Bouton flottant devis (mobile) ── */}
+        {currentDevis && !showMobileDevis && (
+          <button
+            onClick={() => setShowMobileDevis(true)}
+            className="lg:hidden fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm px-5 py-3 rounded-full shadow-lg active:scale-95 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {t("devis.title", lang)}
+          </button>
+        )}
       </div>
 
       {/* ── Devis panel (desktop) ── */}
@@ -348,6 +119,36 @@ export default function HomePage() {
             onChangeTva={handleChangeTva}
             isGenerating={isGeneratingPdf}
           />
+        </div>
+      )}
+
+      {/* ── Devis en tiroir plein ecran (mobile) ── */}
+      {currentDevis && showMobileDevis && (
+        <div className="lg:hidden fixed inset-0 z-50 flex flex-col bg-white">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+            <span className="text-sm font-semibold text-slate-700">{t("devis.title", lang)}</span>
+            <button
+              onClick={() => setShowMobileDevis(false)}
+              aria-label={t("devis.close", lang)}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <DevisPreview
+              devis={currentDevis}
+              lang={lang}
+              onGeneratePdf={handleGeneratePdf}
+              onPrintPdf={handlePrintPdf}
+              onSendDevis={handleSendDevis}
+              onSaveSignature={handleSignatureSave}
+              onChangeTva={handleChangeTva}
+              isGenerating={isGeneratingPdf}
+            />
+          </div>
         </div>
       )}
     </div>
