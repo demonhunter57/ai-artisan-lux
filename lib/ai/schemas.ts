@@ -40,6 +40,10 @@ export const DevisSchema = z.object({
   notes: z.string().optional(),
   status: z.enum(["draft", "sent", "validated", "paid", "overdue", "cancelled"]).optional(),
   isRenovationPrincipal: z.boolean().optional(),
+  signatureDataUrl: z.string().optional(),
+  signerName: z.string().optional(),
+  signedAt: z.string().optional(),
+  language: z.enum(["fr", "en", "lb"]).optional(),
 });
 
 export const ClaudeResponseSchema = z.object({
@@ -82,4 +86,18 @@ export const PdfPayloadSchema = z.object({
   }),
   artisanProfile: ArtisanProfileSchema,
   language: z.enum(["fr", "en", "lb"]).optional(),
+});
+
+export const DocumentStatusSchema = z.enum(["draft", "sent", "validated", "paid", "overdue", "cancelled"]);
+
+export const DocumentRecordSchema = DevisSchema.extend({
+  type: z.enum(["devis", "facture"]),
+  client: ClientSchema,
+  items: z.array(DevisItemSchema).min(1),
+});
+
+export const DocumentUpdateSchema = DocumentRecordSchema.partial();
+
+export const StatusChangeSchema = z.object({
+  status: DocumentStatusSchema,
 });

@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { Devis, DevisItem } from "@/types";
 import { DEFAULT_TVA_RATE } from "@/constants/tva";
 
@@ -28,4 +29,9 @@ export function computeDevisTotals(devis: Partial<Devis>): Partial<Devis> {
     tvaAmount,
     total: +(subtotal + tvaAmount).toFixed(2),
   };
+}
+
+export function generateDocumentNumber(type: Devis["type"], date: Date = new Date()): string {
+  const prefix = type === "facture" ? "F" : "D";
+  return `${prefix}-${format(date, "yyyyMMdd-HHmm")}`;
 }

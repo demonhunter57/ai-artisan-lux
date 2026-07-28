@@ -5,7 +5,7 @@ import { Devis, Language } from "@/types";
 import { t } from "@/i18n";
 import React from "react";
 import { format } from "date-fns";
-import { computeDevisTotals } from "@/lib/devis";
+import { computeDevisTotals, generateDocumentNumber } from "@/lib/devis";
 import { logError, logInfo } from "@/lib/logger";
 import { PdfPayloadSchema } from "@/lib/ai/schemas";
 import { DEFAULT_TVA_RATE } from "@/constants/tva";
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         "yyyy-MM-dd"
       ),
       dueDate: devis.dueDate,
-      number: devis.number ?? `${devis.type === "facture" ? "F" : "D"}-${format(new Date(), "yyyyMMdd-HHmm")}`,
+      number: devis.number ?? generateDocumentNumber(devis.type ?? "devis"),
       client: devis.client,
       items: normalizedDevis.items ?? [],
       tvaRate: normalizedDevis.tvaRate ?? DEFAULT_TVA_RATE,
