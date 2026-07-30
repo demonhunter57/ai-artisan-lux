@@ -94,6 +94,7 @@ export const fr: Record<string, string> = {
   "devis.status.validated": "Validé",
   "devis.status.paid": "Payé",
   "devis.status.overdue": "En retard",
+  "devis.status.cancelled": "Annulé",
 
   // TVA
   "tva.question": "Ces travaux concernent-ils la rénovation d'un logement destiné à l'habitation principale ? (éligible au taux réduit de 3%)",
@@ -126,4 +127,60 @@ export const fr: Record<string, string> = {
   "settings.bic": "BIC/SWIFT",
   "settings.save": "Enregistrer",
   "settings.saved": "Enregistré !",
+
+  // Navigation
+  "nav.journal": "Journal",
+
+  // Sauvegarde depuis le chat
+  "chat.save": "Enregistrer",
+  "chat.saveHint": "Sauvegarde ce devis dans l'historique.",
+  "chat.saved": "Devis enregistré dans l'historique.",
+
+  // Historique
+  "history.title": "Historique",
+  "history.new": "Nouveau document",
+  "history.filter.type": "Type",
+  "history.filter.type.all": "Tous",
+  "history.filter.type.devis": "Devis",
+  "history.filter.type.facture": "Factures",
+  "history.filter.status": "Statut",
+  "history.filter.status.all": "Tous",
+  "history.empty": "Aucun devis ou facture pour le moment.",
+  "history.column.number": "N°",
+  "history.column.client": "Client",
+  "history.column.date": "Date",
+  "history.column.total": "Total",
+  "history.column.status": "Statut",
+  "history.action.view": "Voir",
+  "history.action.downloadPdf": "PDF",
+  "history.pagination.prev": "Précédent",
+  "history.pagination.next": "Suivant",
+
+  // Formulaire de creation/edition manuelle
+  "document.form.title.create": "Nouveau document",
+  "document.form.title.edit": "Modifier le document",
+  "document.form.save": "Enregistrer",
+  "document.form.saved": "Document enregistré.",
+  "document.form.type.devis": "Devis",
+  "document.form.type.facture": "Facture",
+  "document.form.addItem": "Ajouter une ligne",
+  "document.form.removeItem": "Supprimer",
+  "document.status.markSent": "Marquer envoyée",
+  "document.status.markValidated": "Marquer validée",
+  "document.status.markPaid": "Marquer payée",
+  "document.status.markCancelled": "Annuler",
+  "document.action.edit": "Modifier",
+  "document.action.backToHistory": "Retour à l'historique",
+
+  // Journal comptable
+  "journal.title": "Journal comptable",
+  "journal.disclaimer": "Plan comptable simplifié à titre illustratif — non certifié par un expert-comptable. Consultez un professionnel avant usage fiscal réel.",
+  "journal.empty": "Aucune écriture comptable pour le moment.",
+  "journal.column.date": "Date",
+  "journal.column.label": "Libellé",
+  "journal.column.account": "Compte",
+  "journal.column.debit": "Débit",
+  "journal.column.credit": "Crédit",
+  "journal.balances.title": "Soldes par compte",
+  "journal.balances.balance": "Solde",
 };

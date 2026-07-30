@@ -17,7 +17,9 @@ interface Props {
   onSendDevis: () => void;
   onSaveSignature: (signatureDataUrl: string, signerName: string) => void;
   onChangeTva: (rate: number) => void;
+  onSaveDocument: () => void;
   isGenerating: boolean;
+  isSaving: boolean;
 }
 
 const localeMap = { fr, en: enUS, lb: fr };
@@ -30,7 +32,9 @@ export default function DevisPreview({
   onSendDevis,
   onSaveSignature,
   onChangeTva,
+  onSaveDocument,
   isGenerating,
+  isSaving,
 }: Props) {
   const dateLocale = localeMap[lang];
   const [activeTab, setActiveTab] = useState<"actions" | "signature">("actions");
@@ -252,6 +256,18 @@ export default function DevisPreview({
 
         {activeTab === "actions" ? (
           <div className="space-y-2">
+            <button
+              onClick={onSaveDocument}
+              disabled={isSaving || !devis.client?.name || !devis.items?.length}
+              className="w-full flex items-center justify-center gap-2 border border-brand-200 bg-brand-50 hover:bg-brand-100 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-brand-700 font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 21v-8H7v8M7 3v5h8M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+              </svg>
+              {isSaving ? t("devis.generating", lang) : t("chat.save", lang)}
+            </button>
+            <p className="text-xs text-slate-400">{t("chat.saveHint", lang)}</p>
+
             <button
               onClick={onSendDevis}
               disabled={!devis.client?.name}

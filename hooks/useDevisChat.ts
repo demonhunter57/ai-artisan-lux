@@ -6,6 +6,7 @@ import { computeDevisTotals } from "@/lib/devis";
 import { DEFAULT_TVA_RATE, REDUCED_TVA_RATE } from "@/constants/tva";
 import { format } from "date-fns";
 import artisanProfile from "@/data/artisan-profile.json";
+import { useLanguage } from "@/components/layout/LanguageProvider";
 
 const makeWelcome = (lang: Language): ChatMessage => ({
   id: uuid(),
@@ -20,16 +21,16 @@ const STORAGE_KEY = "ai-artisan-lux:session";
 interface StoredSession {
   messages?: ChatMessage[];
   currentDevis?: Partial<Devis> | null;
-  lang?: Language;
 }
 
-export function useDevisChat(initialLang: Language) {
-  const [lang, setLang] = useState<Language>(initialLang);
-  const [messages, setMessages] = useState<ChatMessage[]>([makeWelcome(initialLang)]);
+export function useDevisChat() {
+  const { lang, setLang } = useLanguage();
+  const [messages, setMessages] = useState<ChatMessage[]>([makeWelcome(lang)]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [currentDevis, setCurrentDevis] = useState<Partial<Devis> | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const hasRestoredRef = useRef(false);
 
   useEffect(() => {
@@ -39,7 +40,6 @@ export function useDevisChat(initialLang: Language) {
         const saved = JSON.parse(raw) as StoredSession;
         if (saved.messages?.length) setMessages(saved.messages);
         if (saved.currentDevis) setCurrentDevis(saved.currentDevis);
-        if (saved.lang) setLang(saved.lang);
       }
     } catch {
       // Session corrompue ou stockage indisponible (mode prive) - on repart d'un etat neuf
@@ -50,11 +50,11 @@ export function useDevisChat(initialLang: Language) {
   useEffect(() => {
     if (!hasRestoredRef.current) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages, currentDevis, lang }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages, currentDevis }));
     } catch {
       // Quota depasse ou stockage indisponible - la session ne sera pas persistee
     }
-  }, [messages, currentDevis, lang]);
+  }, [messages, currentDevis]);
 
   const addMessage = (msg: Omit<ChatMessage, "id" | "timestamp">) => {
     const full: ChatMessage = {
@@ -316,6 +316,39 @@ export function useDevisChat(initialLang: Language) {
     }
   };
 
+  /**
+   * Sauvegarde explicite du devis courant dans l'historique (base de donnees).
+   * Cree un nouveau document si currentDevis n'a pas encore d'id, sinon met a jour
+   * l'enregistrement existant — les tours de chat suivants restent locaux tant que
+   * l'utilisateur ne re-clique pas sur "Enregistrer".
+   */
+  const handleSaveDocument = async () => {
+    if (!currentDevis || isSaving) return;
+    setIsSaving(true);
+
+    try {
+      const isUpdate = Boolean(currentDevis.id);
+      const res = await fetch(
+        isUpdate ? `/api/documents/${currentDevis.id}` : "/api/documents",
+        {
+          method: isUpdate ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...currentDevis, language: lang }),
+        }
+      );
+
+      if (!res.ok) throw new Error("Save failed");
+      const { document } = (await res.json()) as { document: Devis };
+      setCurrentDevis(document);
+
+      addMessage({ role: "assistant", content: t("chat.saved", lang), action: "none" });
+    } catch {
+      addMessage({ role: "assistant", content: t("chat.error.generic", lang), action: "none" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return {
     lang,
     messages,
@@ -323,6 +356,7 @@ export function useDevisChat(initialLang: Language) {
     isTyping,
     currentDevis,
     isGeneratingPdf,
+    isSaving,
     setInput,
     send,
     handleTvaChoice,
@@ -331,6 +365,7 @@ export function useDevisChat(initialLang: Language) {
     handlePrintPdf,
     handleSendDevis,
     handleSignatureSave,
+    handleSaveDocument,
     handleNewChat,
     handleLangChange,
   };

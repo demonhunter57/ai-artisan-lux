@@ -19,6 +19,7 @@ export default function HomePage() {
     isTyping,
     currentDevis,
     isGeneratingPdf,
+    isSaving,
     setInput,
     send,
     handleTvaChoice,
@@ -27,9 +28,10 @@ export default function HomePage() {
     handlePrintPdf,
     handleSendDevis,
     handleSignatureSave,
+    handleSaveDocument,
     handleNewChat,
     handleLangChange,
-  } = useDevisChat("fr");
+  } = useDevisChat();
 
   const [showMobileDevis, setShowMobileDevis] = useState(false);
   const [hadDevis, setHadDevis] = useState(false);
@@ -49,7 +51,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-screen bg-lavender-100">
+    <div className="flex h-full bg-lavender-100">
       {/* Column: header + chat */}
       <div className={`flex-1 flex flex-col min-w-0 ${currentDevis ? "" : "max-w-[760px] w-full mx-auto md:my-3 md:rounded-[28px] md:border md:border-lavender-200 md:overflow-hidden md:bg-lavender-100"}`}>
 
@@ -117,7 +119,9 @@ export default function HomePage() {
             onSendDevis={handleSendDevis}
             onSaveSignature={handleSignatureSave}
             onChangeTva={handleChangeTva}
+            onSaveDocument={handleSaveDocument}
             isGenerating={isGeneratingPdf}
+            isSaving={isSaving}
           />
         </div>
       )}
@@ -146,7 +150,9 @@ export default function HomePage() {
               onSendDevis={handleSendDevis}
               onSaveSignature={handleSignatureSave}
               onChangeTva={handleChangeTva}
+              onSaveDocument={handleSaveDocument}
               isGenerating={isGeneratingPdf}
+              isSaving={isSaving}
             />
           </div>
         </div>
