@@ -8,6 +8,7 @@ import { DEFAULT_TVA_RATE, TVA_RATES } from "@/constants/tva";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import SignaturePad from "./SignaturePad";
+import StatusBadge from "./StatusBadge";
 
 interface Props {
   devis: Partial<Devis>;
@@ -326,21 +327,5 @@ export default function DevisPreview({
         )}
       </div>
     </div>
-  );
-}
-
-function StatusBadge({ status, lang }: { status: string; lang: Language }) {
-  const config: Record<string, { color: string; key: string }> = {
-    draft:     { color: "bg-slate-100 text-slate-600",   key: "devis.status.draft" },
-    sent:      { color: "bg-blue-100 text-blue-700",     key: "devis.status.sent" },
-    validated: { color: "bg-green-100 text-green-700",   key: "devis.status.validated" },
-    paid:      { color: "bg-emerald-100 text-emerald-700", key: "devis.status.paid" },
-    overdue:   { color: "bg-red-100 text-red-700",       key: "devis.status.overdue" },
-  };
-  const c = config[status] ?? config.draft;
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.color}`}>
-      {t(c.key, lang)}
-    </span>
   );
 }

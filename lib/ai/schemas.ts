@@ -101,3 +101,13 @@ export const DocumentUpdateSchema = DocumentRecordSchema.partial();
 export const StatusChangeSchema = z.object({
   status: DocumentStatusSchema,
 });
+
+export const CatalogItemSchema = z.object({
+  reference: z.string().min(1),
+  description: z.string().min(1),
+  unit: z.string().min(1),
+  unitPrice: z.coerce.number().min(0),
+  tvaRate: z.coerce.number().optional(),
+});
+
+export const CatalogItemUpdateSchema = CatalogItemSchema.partial();

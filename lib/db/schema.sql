@@ -87,3 +87,18 @@ CREATE TABLE IF NOT EXISTS journal_lines (
 
 CREATE INDEX IF NOT EXISTS idx_journal_lines_entry_id ON journal_lines(entry_id);
 CREATE INDEX IF NOT EXISTS idx_journal_lines_account_code ON journal_lines(account_code);
+
+-- catalog_items: bibliotheque d'articles/prestations reutilisables (chat IA + formulaire manuel).
+-- Seedee depuis data/prestations-prix.json au premier demarrage si la table est vide (lib/db/catalog.ts).
+CREATE TABLE IF NOT EXISTS catalog_items (
+  id           TEXT PRIMARY KEY,
+  reference    TEXT NOT NULL,
+  description  TEXT NOT NULL,
+  unit         TEXT NOT NULL,
+  unit_price   REAL NOT NULL,
+  tva_rate     REAL NOT NULL DEFAULT 17,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_items_reference ON catalog_items(reference);

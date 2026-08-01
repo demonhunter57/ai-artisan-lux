@@ -1,15 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ChatInterface from "@/components/chat/ChatInterface";
 import DevisPreview from "@/components/devis/DevisPreview";
-import { PriceCatalog } from "@/types";
-import priceCatalogData from "@/data/prestations-prix.json";
+import { PriceCatalogItem } from "@/types";
 import { LANGUAGES } from "@/constants/languages";
 import { useDevisChat } from "@/hooks/useDevisChat";
 import { t } from "@/i18n";
-
-const priceCatalog = priceCatalogData as PriceCatalog;
 
 export default function HomePage() {
   const {
@@ -35,6 +32,22 @@ export default function HomePage() {
 
   const [showMobileDevis, setShowMobileDevis] = useState(false);
   const [hadDevis, setHadDevis] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<PriceCatalogItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/catalog")
+      .then((res) => res.json())
+      .then((data: { items?: PriceCatalogItem[] }) => {
+        if (!cancelled) setCatalogItems(data.items ?? []);
+      })
+      .catch(() => {
+        // Bibliotheque indisponible - le chat reste utilisable sans suggestions rapides
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Ouvre automatiquement le tiroir mobile la premiere fois qu'un devis apparait
   const hasDevisNow = Boolean(currentDevis);
@@ -86,7 +99,7 @@ export default function HomePage() {
             isTyping={isTyping}
             input={input}
             lang={lang}
-            priceCatalog={priceCatalog}
+            catalogItems={catalogItems}
             onInputChange={setInput}
             onSend={send}
             onNewChat={onNewChat}

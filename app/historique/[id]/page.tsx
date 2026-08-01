@@ -121,31 +121,36 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto p-6">
-        <p className="text-sm text-slate-400">...</p>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 md:p-8">
+          <p className="text-sm text-slate-400">...</p>
+        </div>
       </div>
     );
   }
 
   if (!isNew && !record) {
     return (
-      <div className="max-w-3xl mx-auto p-6 space-y-3">
-        <p className="text-sm text-slate-500">404</p>
-        <Link href="/historique" className="text-brand-600 text-sm font-medium">
-          ← {t("document.action.backToHistory", lang)}
-        </Link>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-3">
+          <p className="text-sm text-slate-500">404</p>
+          <Link href="/historique" className="text-brand-600 text-sm font-medium">
+            ← {t("document.action.backToHistory", lang)}
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-4">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-4">
       <Link href="/historique" className="text-sm text-slate-500 hover:text-slate-700">
         ← {t("document.action.backToHistory", lang)}
       </Link>
 
       {isEditing || !record ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className="bg-white rounded-2xl border border-lavender-100 shadow-sm p-6">
           <DocumentForm
             initial={record ?? undefined}
             lang={lang}
@@ -197,7 +202,7 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden min-h-[500px] flex flex-col">
+          <div className="bg-white rounded-2xl border border-lavender-100 shadow-sm overflow-hidden min-h-[500px] flex flex-col">
             <DevisPreview
               devis={record}
               lang={lang}
@@ -215,6 +220,7 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

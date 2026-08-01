@@ -1,7 +1,5 @@
 import type { Language } from "@/types";
-import priceCatalogData from "@/data/prestations-prix.json";
-
-const priceCatalog = priceCatalogData;
+import { listCatalogItems } from "@/lib/db/catalog";
 
 export function normalizePromptProfile(profile: Record<string, string | null>): Record<string, string> {
   return Object.fromEntries(
@@ -16,8 +14,8 @@ export function buildSystemPrompt(language: Language, artisanProfile: Record<str
     lb: "Äntwert ëmmer op LËTZEBUERGESCH (Luxembourgish). If uncertain about a word, use French.",
   };
 
-  const catalogLines = priceCatalog.items
-    .map((item) => `- ${item.reference}: ${item.description} | unité ${item.unit} | prix ${item.unitPrice} ${priceCatalog.currency}`)
+  const catalogLines = listCatalogItems()
+    .map((item) => `- ${item.reference}: ${item.description} | unité ${item.unit} | prix ${item.unitPrice} EUR | TVA ${item.tvaRate}%`)
     .join("\n");
 
   return `Tu es AI-Artisan, un assistant intelligent spécialisé dans la création de devis et de factures pour les artisans du bâtiment au Luxembourg.

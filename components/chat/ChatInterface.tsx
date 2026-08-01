@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef } from "react";
-import { ChatMessage, Language, PriceCatalog } from "@/types";
+import Link from "next/link";
+import { ChatMessage, Language, PriceCatalogItem } from "@/types";
 import { t, tf } from "@/i18n";
 import { format } from "date-fns";
 
@@ -10,7 +11,7 @@ interface Props {
   isTyping: boolean;
   input: string;
   lang: Language;
-  priceCatalog: PriceCatalog;
+  catalogItems: PriceCatalogItem[];
   onInputChange: (v: string) => void;
   onSend: (text?: string) => void;
   onNewChat: () => void;
@@ -64,7 +65,7 @@ const NEXT_STEPS = [
 ];
 
 export default function ChatInterface({
-  messages, isTyping, input, lang, priceCatalog,
+  messages, isTyping, input, lang, catalogItems,
   onInputChange, onSend, onNewChat, onTvaChoice,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -167,13 +168,16 @@ export default function ChatInterface({
                   <p className="text-sm font-semibold text-slate-800">{t("catalog.title", lang)}</p>
                   <p className="text-xs text-slate-400">{t("catalog.subtitle", lang)}</p>
                 </div>
-                <span className="text-[11px] text-slate-400 whitespace-nowrap">
-                  {tf("catalog.updated", lang, { date: priceCatalog.updatedAt })}
-                </span>
+                <Link
+                  href="/bibliotheque"
+                  className="text-[11px] font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap"
+                >
+                  {t("catalog.manage", lang)} →
+                </Link>
               </div>
 
               <div className="grid grid-cols-1 gap-2">
-                {priceCatalog.items.map((item) => (
+                {catalogItems.map((item) => (
                   <button
                     key={item.reference}
                     onClick={() => onSend(tf("catalog.itemPrompt", lang, {

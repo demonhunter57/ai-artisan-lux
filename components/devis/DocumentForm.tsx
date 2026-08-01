@@ -269,7 +269,7 @@ export default function DocumentForm({ initial, lang, onSaved, onCancel }: Props
         <button
           type="submit"
           disabled={isSubmitting || !client.name.trim() || items.length === 0}
-          className="bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg transition-colors text-sm"
+          className="bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg shadow-sm hover:shadow-md transition-all text-sm active:scale-95"
         >
           {isSubmitting ? t("devis.generating", lang) : t("document.form.save", lang)}
         </button>

@@ -18,10 +18,12 @@ export interface ArtisanProfile {
 }
 
 export interface PriceCatalogItem {
+  id?: string;
   reference: string;
   description: string;
   unit: string;
   unitPrice: number;
+  tvaRate: number;
 }
 
 export interface PriceCatalog {
