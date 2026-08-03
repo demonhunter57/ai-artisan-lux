@@ -175,6 +175,9 @@ export const lb: Record<string, string> = {
   "journal.balances.balance": "Solde",
 
   "nav.catalog": "Bibliothéik",
+  "nav.create": "Erstellen",
+  "creation.title": "Neie Devis / Rechnung",
+  "creation.subtitle": "Erstellt een Devis oder eng Rechnung manuell.",
   "catalog.page.title": "Bibliothéik vun Artikelen",
   "catalog.page.subtitle": "Aarbechtstypen déi am Chat an an den Devisen erëmbenotzt ginn.",
   "catalog.tab.list": "Artikelen",

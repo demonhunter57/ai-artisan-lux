@@ -55,20 +55,9 @@ export default function HistoriquePage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-5xl mx-auto p-6 md:p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{t("history.title", lang)}</h1>
-            {total > 0 && <p className="text-sm text-slate-400 mt-0.5">{total}</p>}
-          </div>
-          <Link
-            href="/historique/nouveau"
-            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 px-5 rounded-full text-sm shadow-sm hover:shadow-md transition-all active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {t("history.new", lang)}
-          </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{t("history.title", lang)}</h1>
+          {total > 0 && <p className="text-sm text-slate-400 mt-0.5">{total}</p>}
         </div>
 
         <div className="flex gap-3">

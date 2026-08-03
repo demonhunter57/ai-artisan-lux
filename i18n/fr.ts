@@ -187,6 +187,9 @@ export const fr: Record<string, string> = {
 
   // Bibliotheque d'articles
   "nav.catalog": "Bibliothèque",
+  "nav.create": "Création",
+  "creation.title": "Nouveau devis / facture",
+  "creation.subtitle": "Créez un devis ou une facture manuellement.",
   "catalog.page.title": "Bibliothèque d'articles",
   "catalog.page.subtitle": "Types de travaux réutilisables dans le chat et les devis.",
   "catalog.tab.list": "Articles",

@@ -7,6 +7,7 @@ import { t } from "@/i18n";
 
 const NAV_ITEMS = [
   { href: "/", labelKey: "nav.chat" },
+  { href: "/creation", labelKey: "nav.create" },
   { href: "/historique", labelKey: "nav.history" },
   { href: "/bibliotheque", labelKey: "nav.catalog" },
   { href: "/journal", labelKey: "nav.journal" },

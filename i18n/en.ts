@@ -175,6 +175,9 @@ export const en: Record<string, string> = {
   "journal.balances.balance": "Balance",
 
   "nav.catalog": "Library",
+  "nav.create": "Create",
+  "creation.title": "New quote / invoice",
+  "creation.subtitle": "Create a quote or invoice manually.",
   "catalog.page.title": "Item library",
   "catalog.page.subtitle": "Reusable work types for chat and quotes.",
   "catalog.tab.list": "Items",
